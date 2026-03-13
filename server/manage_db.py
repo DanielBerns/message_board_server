@@ -10,126 +10,60 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+import argparse
+import logging
 from application import create_app, db
 from application.models import User
 from application.extensions import bcrypt # For password hashing
 
-# Create a minimal app context for DB operations
-# This allows us to work with the database outside of a running Flask request
+# Setup logging
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger('manage_db')
+
 app = create_app(os.getenv('FLASK_CONFIG') or 'development')
 
 def init_db():
-    """Initializes the database and creates all tables."""
     with app.app_context():
         try:
+            logger.info("Initializing database and dropping old tables if they exist...")
+            db.drop_all()
             db.create_all()
-            print("Database initialized and tables created successfully.")
+            logger.info("Database initialized and tables created successfully.")
         except Exception as e:
-            print(f"Error initializing database: {e}")
+            logger.error(f"Error initializing database: {e}")
 
-def create_admin():
-    """Creates the initial admin user if one doesn't exist."""
+def create_user_programmatically(username, password, is_admin):
     with app.app_context():
-        admin_username = input("Enter admin username: ")
-        if User.query.filter_by(username=admin_username, is_admin=True).first():
-            print(f"Admin user '{admin_username}' already exists.")
+        logger.info(f"Attempting to create user: {username} (admin={is_admin})")
+        if User.query.filter_by(username=username).first():
+            logger.warning(f"User '{username}' already exists. Skipping.")
             return
 
-        admin_password = getpass("Enter admin password: ")
-        confirm_password = getpass("Confirm admin password: ")
-
-        if admin_password != confirm_password:
-            print("Passwords do not match. Admin user creation aborted.")
-            return
-
-        hashed_password = bcrypt.generate_password_hash(admin_password).decode('utf-8')
-        admin_user = User(username=admin_username, password_hash=hashed_password, is_admin=True)
+        hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+        user = User(username=username, password_hash=hashed_password, is_admin=is_admin)
 
         try:
-            db.session.add(admin_user)
+            db.session.add(user)
             db.session.commit()
-            print(f"Admin user '{admin_username}' created successfully.")
+            logger.info(f"User '{username}' created successfully.")
         except Exception as e:
             db.session.rollback()
-            print(f"Error creating admin user: {e}")
-
-def add_client_user():
-    """Adds a new client user to the database."""
-    with app.app_context():
-        client_username = input("Enter client username: ")
-        if User.query.filter_by(username=client_username).first():
-            print(f"User '{client_username}' already exists.")
-            return
-
-        client_password = getpass("Enter client password: ")
-        confirm_password = getpass("Confirm client password: ")
-
-        if client_password != confirm_password:
-            print("Passwords do not match. Client user creation aborted.")
-            return
-
-        hashed_password = bcrypt.generate_password_hash(client_password).decode('utf-8')
-        # Client users are not admins by default
-        client_user = User(username=client_username, password_hash=hashed_password, is_admin=False)
-
-        try:
-            db.session.add(client_user)
-            db.session.commit()
-            print(f"Client user '{client_username}' created successfully.")
-        except Exception as e:
-            db.session.rollback()
-            print(f"Error creating client user: {e}")
-
-def reset_user_password():
-    """Resets the password for an existing user (admin or client)."""
-    with app.app_context():
-        username = input("Enter username to reset password for: ")
-        user = User.query.filter_by(username=username).first()
-
-        if not user:
-            print(f"User '{username}' not found.")
-            return
-
-        new_password = getpass("Enter new password: ")
-        confirm_password = getpass("Confirm new password: ")
-
-        if new_password != confirm_password:
-            print("Passwords do not match. Password reset aborted.")
-            return
-
-        hashed_password = bcrypt.generate_password_hash(new_password).decode('utf-8')
-        user.password_hash = hashed_password
-
-        try:
-            db.session.commit()
-            print(f"Password for user '{username}' reset successfully.")
-        except Exception as e:
-            db.session.rollback()
-            print(f"Error resetting password: {e}")
+            logger.error(f"Error creating user {username}: {e}")
 
 if __name__ == '__main__':
-    print("Database Management Script")
-    print("--------------------------")
-    while True:
-        print("\nOptions:")
-        print("1. Initialize Database (Create Tables)")
-        print("2. Create Admin User")
-        print("3. Add Client User")
-        print("4. Reset User Password")
-        print("5. Exit")
-
-        choice = input("Enter your choice: ")
-
-        if choice == '1':
-            init_db()
-        elif choice == '2':
-            create_admin()
-        elif choice == '3':
-            add_client_user()
-        elif choice == '4':
-            reset_user_password()
-        elif choice == '5':
-            print("Exiting.")
-            break
-        else:
-            print("Invalid choice. Please try again.")
+    parser = argparse.ArgumentParser(description="Database Management Script")
+    parser.add_argument('--init', action='store_true', help="Initialize the database (drops existing)")
+    parser.add_argument('--admin', nargs=2, metavar=('USERNAME', 'PASSWORD'), help="Create an admin user")
+    parser.add_argument('--client', nargs=2, metavar=('USERNAME', 'PASSWORD'), help="Create a client user")
+    
+    args = parser.parse_args()
+    
+    if args.init:
+        init_db()
+    if args.admin:
+        create_user_programmatically(args.admin[0], args.admin[1], is_admin=True)
+    if args.client:
+        create_user_programmatically(args.client[0], args.client[1], is_admin=False)
+    
+    if not any(vars(args).values()):
+        parser.print_help()

@@ -24,6 +24,7 @@ class User(db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.String(128), nullable=False)
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
+    last_heartbeat = db.Column(db.DateTime, nullable=True)
 
     sent_messages = db.relationship('Message', foreign_keys='Message.sender_id', backref='sender', lazy=True)
     received_private_messages = db.relationship('MessageRecipient', backref='recipient_user', lazy='dynamic')

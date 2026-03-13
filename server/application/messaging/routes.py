@@ -7,6 +7,10 @@ from application.extensions import db
 from flask_jwt_extended import jwt_required, get_jwt_identity, current_user
 from sqlalchemy.orm import aliased
 from sqlalchemy import or_
+import logging
+from datetime import datetime, timezone
+
+logger = logging.getLogger(__name__)
 
 def get_current_user_id_from_identity(): # Renamed to avoid conflict if current_user.id is preferred
     """Helper function to get the current user's ID from JWT string identity."""
@@ -65,7 +69,8 @@ def send_private_message():
         return jsonify({"msg": "Private message sent successfully", "message_id": message.id}), 201
     except Exception as e:
         db.session.rollback()
-        return jsonify({"msg": "Failed to send private message", "error": str(e)}), 500
+        logger.error(f"Failed to send private message: {e}", exc_info=True)
+        return jsonify({"msg": "Internal server error"}), 500
 
 @messaging_bp.route('/messages/group', methods=['POST'])
 @jwt_required()
@@ -109,7 +114,8 @@ def send_group_message():
         return jsonify({"msg": "Group message sent successfully", "message_id": message.id}), 201
     except Exception as e:
         db.session.rollback()
-        return jsonify({"msg": "Failed to send group message", "error": str(e)}), 500
+        logger.error(f"Failed to send group message: {e}", exc_info=True)
+        return jsonify({"msg": "Internal server error"}), 500
 
 @messaging_bp.route('/messages/public', methods=['POST'])
 @jwt_required()
@@ -147,7 +153,8 @@ def send_public_message():
         return jsonify({"msg": "Public message sent successfully", "message_id": message.id}), 201
     except Exception as e:
         db.session.rollback()
-        return jsonify({"msg": "Failed to send public message", "error": str(e)}), 500
+        logger.error(f"Failed to send public message: {e}", exc_info=True)
+        return jsonify({"msg": "Internal server error"}), 500
 
 # --- Message Retrieval Endpoints ---
 @messaging_bp.route('/messages/private', methods=['GET'])
@@ -284,7 +291,8 @@ def subscribe_to_tags():
         return jsonify({"msg": "Successfully subscribed to tags", "current_subscriptions": current_subscriptions}), 200
     except Exception as e:
         db.session.rollback()
-        return jsonify({"msg": "Failed to subscribe to tags", "error": str(e)}), 500
+        logger.error(f"Failed to subscribe to tags: {e}", exc_info=True)
+        return jsonify({"msg": "Internal server error"}), 500
 
 @messaging_bp.route('/tags/unsubscribe', methods=['POST'])
 @jwt_required()
@@ -311,7 +319,8 @@ def unsubscribe_from_tags():
         return jsonify({"msg": "Successfully unsubscribed from tags", "current_subscriptions": current_subscriptions}), 200
     except Exception as e:
         db.session.rollback()
-        return jsonify({"msg": "Failed to unsubscribe from tags", "error": str(e)}), 500
+        logger.error(f"Failed to unsubscribe from tags: {e}", exc_info=True)
+        return jsonify({"msg": "Internal server error"}), 500
 
 # --- Message Deletion Endpoint ---
 @messaging_bp.route('/messages/<int:message_id>', methods=['DELETE'])
@@ -349,7 +358,8 @@ def delete_message(message_id):
         return jsonify({"msg": f"Message {message_id} deleted successfully"}), 200
     except Exception as e:
         db.session.rollback()
-        return jsonify({"msg": "Failed to delete message", "error": str(e)}), 500
+        logger.error(f"Failed to delete message: {e}", exc_info=True)
+        return jsonify({"msg": "Internal server error"}), 500
 
 @messaging_bp.route('/messages/delete_all', methods=['POST'])
 @jwt_required()
@@ -381,4 +391,41 @@ def delete_all_messages():
         }), 200
     except Exception as e:
         db.session.rollback()
-        return jsonify({"msg": "Failed to delete all messages", "error": str(e)}), 500
+        logger.error(f"Failed to delete all messages: {e}", exc_info=True)
+        return jsonify({"msg": "Internal server error"}), 500
+
+# --- Heartbeat Endpoints ---
+@messaging_bp.route('/heartbeat', methods=['POST'])
+@jwt_required()
+def send_heartbeat():
+    """
+    Updates the authenticated user's last heartbeat timestamp.
+    """
+    auth_user = current_user
+    try:
+        auth_user.last_heartbeat = datetime.now(timezone.utc)
+        db.session.commit()
+        return jsonify({"msg": "Heartbeat updated successfully"}), 200
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Failed to update heartbeat: {e}", exc_info=True)
+        return jsonify({"msg": "Internal server error"}), 500
+
+@messaging_bp.route('/heartbeat', methods=['GET'])
+@jwt_required()
+def get_heartbeats():
+    """
+    Retrieves the last heartbeat status of all users.
+    """
+    try:
+        users = User.query.all()
+        heartbeats = []
+        for user in users:
+            heartbeats.append({
+                "username": user.username,
+                "last_heartbeat": user.last_heartbeat.isoformat() if user.last_heartbeat else None
+            })
+        return jsonify(heartbeats), 200
+    except Exception as e:
+        logger.error(f"Failed to retrieve heartbeats: {e}", exc_info=True)
+        return jsonify({"msg": "Internal server error"}), 500

@@ -3,8 +3,11 @@
 import os
 from dotenv import load_dotenv
 
+import logging
+
 def main():
     load_dotenv()
+    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     from application import create_app
 
     config_name = os.getenv('FLASK_CONFIG', 'development')
