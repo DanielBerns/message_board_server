@@ -121,3 +121,12 @@ All payload exchanges are in JSON format (`Content-Type: application/json`).
 * **Get Server Status (Admin Only)**
   * **Endpoint:** `GET /api/admin/status`
   * **Returns:** `200 OK` with server status and version information.
+
+### 5. Heartbeat (`/api/heartbeat`)
+
+* **Send Heartbeat**
+  * **Endpoint:** `POST /api/heartbeat`
+  * **Returns:** `200 OK` with success message.
+* **Get Heartbeats**
+  * **Endpoint:** `GET /api/heartbeat`
+  * **Returns:** `200 OK` with a list of users and their last heartbeat timestamps.
