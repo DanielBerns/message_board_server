@@ -2,8 +2,8 @@
 # Contains routes for sending, receiving, and managing messages.
 from flask import request, jsonify
 from . import messaging_bp
-from application.models import User, Message, MessageRecipient, Tag, db, message_tags_association
-from application.extensions import db
+from ..models import User, Message, MessageRecipient, Tag, db, message_tags_association
+from ..extensions import db
 from flask_jwt_extended import jwt_required, get_jwt_identity, current_user
 from sqlalchemy.orm import aliased
 from sqlalchemy import or_
@@ -43,6 +43,7 @@ def send_private_message():
     # current_user is the User object loaded by user_lookup_loader
     sender_id = current_user.id
     data = request.get_json()
+    logger.info(f"send_private_message called by user {sender_id} with data: {data}")
 
     if not data or not data.get('recipient_username') or not data.get('content'):
         return jsonify({"msg": "Missing recipient_username or content"}), 400
@@ -81,6 +82,7 @@ def send_group_message():
     """
     sender_id = current_user.id
     data = request.get_json()
+    logger.info(f"send_group_message called by user {sender_id} with data: {data}")
 
     if not data or not data.get('recipient_usernames') or not data.get('content'):
         return jsonify({"msg": "Missing recipient_usernames or content"}), 400
@@ -126,6 +128,7 @@ def send_public_message():
     """
     sender_id = current_user.id
     data = request.get_json()
+    logger.info(f"send_public_message called by user {sender_id} with data: {data}")
 
     if not data or not data.get('content'):
         return jsonify({"msg": "Missing content"}), 400
@@ -162,6 +165,7 @@ def send_public_message():
 def get_private_messages():
     """Retrieves private messages for the authenticated user (both sent and received)."""
     auth_user_id = current_user.id # User ID from loaded User object
+    logger.info(f"get_private_messages called by user {auth_user_id}")
 
     sent_private = Message.query.filter_by(sender_id=auth_user_id, message_type='private').order_by(Message.timestamp.desc()).all()
 
@@ -207,6 +211,7 @@ def get_private_messages():
 def get_group_messages():
     """Retrieves group messages where the authenticated user is either the sender or a recipient."""
     auth_user_id = current_user.id
+    logger.info(f"get_group_messages called by user {auth_user_id}")
 
     sent_group = Message.query.filter_by(sender_id=auth_user_id, message_type='group').all()
 
@@ -239,6 +244,7 @@ def get_public_messages():
     auth_user = current_user # Authenticated User object
 
     query_tags_str = request.args.get('tags')
+    logger.info(f"get_public_messages called by user {auth_user.id} with tags: {query_tags_str}")
     query = Message.query.filter_by(message_type='public')
 
     if query_tags_str:
@@ -272,6 +278,7 @@ def subscribe_to_tags():
     """
     auth_user = current_user
     data = request.get_json()
+    logger.info(f"subscribe_to_tags called by user {auth_user.id} with data: {data}")
 
     if not data or not isinstance(data.get('tags'), list):
         return jsonify({"msg": "Missing 'tags' list in request"}), 400
@@ -303,6 +310,7 @@ def unsubscribe_from_tags():
     """
     auth_user = current_user
     data = request.get_json()
+    logger.info(f"unsubscribe_from_tags called by user {auth_user.id} with data: {data}")
 
     if not data or not isinstance(data.get('tags'), list):
         return jsonify({"msg": "Missing 'tags' list in request"}), 400
@@ -334,6 +342,7 @@ def delete_message(message_id):
     """
     auth_user_id = current_user.id
     is_current_user_admin = is_admin_user_from_current_user_obj() # Use updated helper
+    logger.info(f"delete_message called for message_id {message_id} by user {auth_user_id} (Admin: {is_current_user_admin})")
 
     message = Message.query.get(message_id)
     if not message:
@@ -368,6 +377,7 @@ def delete_all_messages():
     Deletes all messages if the user is an admin and provides a specific confirmation message.
     Expects JSON: {"confirmation": "delete all messages"}
     """
+    logger.info(f"delete_all_messages called by user {current_user.id}")
     if not is_admin_user_from_current_user_obj():
         return jsonify({"msg": "Admin access required"}), 403
 
@@ -402,6 +412,7 @@ def send_heartbeat():
     Updates the authenticated user's last heartbeat timestamp.
     """
     auth_user = current_user
+    logger.info(f"send_heartbeat called by user {auth_user.id}")
     try:
         auth_user.last_heartbeat = datetime.now(timezone.utc)
         db.session.commit()
@@ -417,6 +428,7 @@ def get_heartbeats():
     """
     Retrieves the last heartbeat status of all users.
     """
+    logger.info("get_heartbeats called")
     try:
         users = User.query.all()
         heartbeats = []

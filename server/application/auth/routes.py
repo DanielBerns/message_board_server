@@ -2,8 +2,8 @@
 # Contains routes related to authentication, like login.
 from flask import request, jsonify
 from . import auth_bp
-from application.models import User, TokenBlocklist
-from application.extensions import bcrypt, db
+from ..models import User, TokenBlocklist
+from ..extensions import bcrypt, db
 from flask_jwt_extended import create_access_token, create_refresh_token, jwt_required, get_jwt_identity, get_jwt
 import logging
 
@@ -55,7 +55,9 @@ def refresh():
     The identity from the refresh token (user ID string) is used for the new access token.
     """
     try:
+        logger.info("Token refresh endpoint called")
         current_user_identity_str = get_jwt_identity() # This will be the user ID string
+        logger.info(f"Refreshing token for user ID: {current_user_identity_str}")
         new_access_token = create_access_token(identity=current_user_identity_str)
         return jsonify(access_token=new_access_token), 200
     except Exception as e:
@@ -69,9 +71,12 @@ def logout():
     Logs out a user and adds their token to the blocklist.
     """
     try:
+        logger.info("Logout endpoint called")
         jti = get_jwt()['jti']
+        logger.info(f"Adding token {jti} to blocklist")
         db.session.add(TokenBlocklist(jti=jti))
         db.session.commit()
+        logger.info("Token added to blocklist successfully")
         return jsonify({"msg": "Logout successful."}), 200
     except Exception as e:
         db.session.rollback()
