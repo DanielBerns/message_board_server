@@ -12,6 +12,8 @@ load_dotenv()
 
 import argparse
 import logging
+import sys
+import yaml
 from application import create_app, db
 from application.models import User
 from application.extensions import bcrypt # For password hashing
@@ -50,11 +52,33 @@ def create_user_programmatically(username, password, is_admin):
             db.session.rollback()
             logger.error(f"Error creating user {username}: {e}")
 
+def init_from_yaml(filepath):
+    if not os.path.exists(filepath):
+        logger.error(f"YAML file not found: {filepath}")
+        return
+
+    try:
+        with open(filepath, 'r') as f:
+            data = yaml.safe_load(f)
+    except yaml.YAMLError as e:
+        logger.error(f"Error parsing YAML: {e}")
+        return
+
+    admin_data = data.get('admin')
+    if admin_data:
+        create_user_programmatically(admin_data['username'], admin_data['password'], is_admin=True)
+    
+    users_data = data.get('users', [])
+    for user_data in users_data:
+        create_user_programmatically(user_data['username'], user_data['password'], is_admin=False)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Database Management Script")
     parser.add_argument('--init', action='store_true', help="Initialize the database (drops existing)")
     parser.add_argument('--admin', nargs=2, metavar=('USERNAME', 'PASSWORD'), help="Create an admin user")
     parser.add_argument('--client', nargs=2, metavar=('USERNAME', 'PASSWORD'), help="Create a client user")
+    parser.add_argument('--yaml', type=str, help="Initialize database users from a YAML file")
     
     args = parser.parse_args()
     
@@ -64,6 +88,8 @@ if __name__ == '__main__':
         create_user_programmatically(args.admin[0], args.admin[1], is_admin=True)
     if args.client:
         create_user_programmatically(args.client[0], args.client[1], is_admin=False)
+    if args.yaml:
+        init_from_yaml(args.yaml)
     
     if not any(vars(args).values()):
         parser.print_help()
